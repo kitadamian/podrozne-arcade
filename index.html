@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gry Podróżne - Offline Arcade</title>
+    <meta name="description" content="Kolekcja gier przeglądarkowych do grania w podróży bez internetu. Autor: Damian Kita.">
+    <style>
+        :root {
+            --bg-color: #121212;
+            --surface-color: #1e1e1e;
+            --primary-color: #00e676; /* Neon Green */
+            --accent-color: #ff1744; /* Neon Red */
+            --text-color: #ffffff;
+            --text-secondary: #b0b0b0;
+            --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation; /* Zapobiega zoomowaniu na dwuklik */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- UI Components --- */
+        header {
+            background-color: var(--surface-color);
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            position: relative;
+            z-index: 10;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .audio-controls {
+            position: absolute;
+            top: 50%;
+            right: 1rem;
+            transform: translateY(-50%);
+            cursor: pointer;
+            background: none;
+            border: 1px solid var(--text-secondary);
+            color: var(--text-secondary);
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+        }
+
+        .audio-controls.active {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            box-shadow: 0 0 8px var(--primary-color);
+        }
+
+        main {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* --- Game Menu --- */
+        #game-menu {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            width: 100%;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .game-card {
+            background-color: var(--surface-color);
+            border-radius: var(--radius);
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #333;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 230, 118, 0.2);
+            border-color: var(--primary-color);
+        }
+
+        .game-icon {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .game-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .game-desc {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* --- Active Game Area --- */
+        #game-container {
+            display: none; /* Ukryty domyślnie */
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .score-board {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .btn-back {
+            background: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            padding: 5px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .btn-back:hover {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        canvas {
+            background-color: #000;
+            border-radius: 4px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            max-width: 100%;
+            height: auto;
+            touch-action: none;
+        }
+
+        /* --- Mobile Controls --- */
+        #mobile-controls {
+            display: none; /* Włączane przez JS na mobile */
+            margin-top: 20px;
+            width: 100%;
+            max-width: 300px;
+            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .d-pad-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+        }
+
+        .d-pad-btn:active {
+            background: rgba(0, 230, 118, 0.3);
+        }
+
+        .d-up { grid-column: 2; grid-row: 1; }
+        .d-left { grid-column: 1; grid-row: 2; }
+        .d-down { grid-column: 2; grid-row: 2; }
+        .d-right { grid-column: 3; grid-row: 2; }
+        .d-action { 
+            grid-column: 1 / span 3; 
+            margin-top: 10px; 
+            background: rgba(255, 23, 68, 0.2);
+            border-color: var(--accent-color);
+        }
+
+        /* --- Memory Game Specifics --- */
+        #memory-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .memory-card {
+            background-color: #333;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: transparent;
+            transition: transform 0.3s, background-color 0.3s;
+            user-select: none;
+        }
+
+        .memory-card.flipped, .memory-card.matched {
+            background-color: var(--surface-color);
+            border: 2px solid var(--primary-color);
+            color: white;
+            transform: rotateY(180deg);
+        }
+
+        .memory-card.matched {
+            border-color: var(--primary-color);
+            background-color: rgba(0, 230, 118, 0.1);
+        }
+
+        /* --- Footer --- */
+        footer {
+            background-color: var(--surface-color);
+            padding: 2rem;
+            text-align: center;
+            margin-top: auto;
+            border-top: 1px solid #333;
+        }
+
+        .author-box {
+            display: inline-block;
+            text-align: left;
+            border-left: 3px solid var(--primary-color);
+            padding-left: 15px;
+        }
+
+        .author-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .author-link {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .author-link:hover {
+            text-decoration: underline;
+        }
+
+        /* --- Modal/Overlay --- */
+        #overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            text-align: center;
+            padding: 20px;
+        }
+
+        #overlay h2 {
+            font-size: 2.5rem;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        #overlay p {
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 0 15px var(--primary-color);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Responsywność sterowania */
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: grid;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Podróżne Arcade</h1>
+    <button id="audio-toggle" class="audio-controls">🔇 Dźwięk: OFF</button>
+</header>
+
+<main>
+    <!-- Menu Wyboru Gier -->
+    <section id="game-menu">
+        <div class="game-card" onclick="gameManager.loadGame('snake')">
+            <span class="game-icon">🐍</span>
+            <div class="game-title">Wąż (Snake)</div>
+            <div class="game-desc">Klasyczny klasyk. Zjadaj jedzenie, unikaj ścian i ogona.</div>
+        </div>
+        <div class="game-card" onclick="gameManager.loadGame('breakout')">
+            <span class="game-icon">🧱</span>
+            <div class="game-title">Klocki (Breakout)</div>
+            <div class="game-desc">Odbijaj piłkę i niszcz wszystkie bloki.</div>
+        </div>
+        <div class="game-card" onclick="gameManager.loadGame('memory')">
+            <span class="game-icon">🧠</span>
+            <div class="game-title">Pamięć (Memory)</div>
+            <div class="game-desc">Znajdź pary symboli w jak najkrótszym czasie.</div>
+        </div>
+    </section>
+
+    <!-- Kontener Aktywnej Gry -->
+    <section id="game-container">
+        <div class="game-header">
+            <button class="btn-back" onclick="gameManager.backToMenu()">← Menu</button>
+            <div class="score-board">Wynik: <span id="score-display">0</span></div>
+        </div>
+
+        <!-- Obszar Canvas dla Snake i Breakout -->
+        <canvas id="gameCanvas" width="400" height="400" style="display:none;"></canvas>
+
+        <!-- Obszar DOM dla Memory -->
+        <div id="memory-grid" style="display:none;"></div>
+
+        <!-- Sterowanie Mobilne -->
+        <div id="mobile-controls">
+            <div class="d-pad-btn d-up" ontouchstart="gameManager.handleInput('up')" onmousedown="gameManager.handleInput('up')">▲</div>
+            <div class="d-pad-btn d-left" ontouchstart="gameManager.handleInput('left')" onmousedown="gameManager.handleInput('left')">◀</div>
+            <div class="d-pad-btn d-down" ontouchstart="gameManager.handleInput('down')" onmousedown="gameManager.handleInput('down')">▼</div>
+            <div class="d-pad-btn d-right" ontouchstart="gameManager.handleInput('right')" onmousedown="gameManager.handleInput('right')">▶</div>
+            <div class="d-pad-btn d-action" id="btn-action" ontouchstart="gameManager.handleInput('action')" onmousedown="gameManager.handleInput('action')">AKCJA</div>
+        </div>
+        
+        <p style="margin-top:10px; color:#666; font-size: 0.8rem;">PC: Strzałki / Spacja | Mobile: Przyciski na ekranie</p>
+    </section>
+</main>
+
+<footer>
+    <div class="author-box">
+        <div class="author-name">Damian Kita</div>
+        <a href="https://linktr.ee/kitadamian" target="_blank" class="author-link">linktr.ee/kitadamian</a>
+    </div>
+</footer>
+
+<!-- Overlay Koniec Gry -->
+<div id="overlay">
+    <h2 id="overlay-title">Koniec Gry</h2>
+    <p id="overlay-msg">Twój wynik: 0</p>
+    <button class="btn-primary" onclick="gameManager.restartGame()">Zagraj ponownie</button>
+    <br><br>
+    <button class="btn-back" onclick="gameManager.backToMenu()">Wybierz inną grę</button>
+</div>
+
+<script>
+/**
+ * System Audio (Web Audio API)
+ * Generuje dźwięki i muzykę bez plików zewnętrznych.
+ */
+class AudioController {
+    constructor() {
+        this.ctx = null;
+        this.enabled = false;
+        this.bgmOscillators = [];
+        this.bgmInterval = null;
+    }
+
+    init() {
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+
+    toggle() {
+        this.init();
+        this.enabled = !this.enabled;
+        
+        if (this.enabled) {
+            if (this.ctx.state === 'suspended') this.ctx.resume();
+            this.startBGM();
+            return true;
+        } else {
+            this.stopBGM();
+            return false;
+        }
+    }
+
+    playTone(freq, type, duration, vol = 0.1) {
+        if (!this.enabled || !this.ctx) return;
+        
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playSfx(name) {
+        if (!this.enabled) return;
+        switch(name) {
+            case 'jump': this.playTone(600, 'square', 0.1); break;
+            case 'crash': this.playTone(150, 'sawtooth', 0.4, 0.2); break;
+            case 'point': this.playTone(800, 'sine', 0.1, 0.1); break;
+            case 'click': this.playTone(400, 'triangle', 0.05); break;
+            case 'win': 
+                this.playTone(500, 'sine', 0.2); 
+                setTimeout(() => this.playTone(700, 'sine', 0.4), 200);
+                break;
+        }
+    }
+
+    startBGM() {
+        if (!this.enabled || this.bgmInterval) return;
+        // Prosta lo-fi basowa linia
+        let noteIndex = 0;
+        const notes = [110, 110, 130, 110, 164, 146, 110, 98]; // A2 riff
+        
+        this.bgmInterval = setInterval(() => {
+            if (!this.enabled) return;
+            const freq = notes[noteIndex % notes.length];
+            this.playTone(freq, 'triangle', 0.3, 0.05); // Niska głośność tła
+            noteIndex++;
+        }, 500);
+    }
+
+    stopBGM() {
+        if (this.bgmInterval) {
+            clearInterval(this.bgmInterval);
+            this.bgmInterval = null;
+        }
+    }
+}
+
+/**
+ * Logika Gry - Wąż (Snake)
+ */
+class SnakeGame {
+    constructor(canvas, onGameOver, updateScore) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.onGameOver = onGameOver;
+        this.updateScore = updateScore;
+        this.grid = 20;
+        this.snake = [];
+        this.food = {};
+        this.dx = 0;
+        this.dy = 0;
+        this.score = 0;
+        this.running = false;
+        this.speed = 100;
+        this.lastTime = 0;
+        this.directionQueue = [];
+    }
+
+    start() {
+        this.snake = [{x: 160, y: 160}, {x: 140, y: 160}, {x: 120, y: 160}];
+        this.score = 0;
+        this.dx = this.grid;
+        this.dy = 0;
+        this.directionQueue = [];
+        this.placeFood();
+        this.running = true;
+        this.updateScore(0);
+        requestAnimationFrame(this.loop.bind(this));
+    }
+
+    placeFood() {
+        this.food.x = Math.floor(Math.random() * (this.canvas.width / this.grid)) * this.grid;
+        this.food.y = Math.floor(Math.random() * (this.canvas.height / this.grid)) * this.grid;
+        // Upewnij się, że jedzenie nie jest na wężu
+        for (let part of this.snake) {
+            if (part.x === this.food.x && part.y === this.food.y) this.placeFood();
+        }
+    }
+
+    handleInput(action) {
+        // Zapobieganie cofaniu się
+        const goingUp = this.dy === -this.grid;
+        const goingDown = this.dy === this.grid;
+        const goingRight = this.dx === this.grid;
+        const goingLeft = this.dx === -this.grid;
+
+        if (action === 'up' && !goingDown) this.directionQueue.push({dx: 0, dy: -this.grid});
+        if (action === 'down' && !goingUp) this.directionQueue.push({dx: 0, dy: this.grid});
+        if (action === 'left' && !goingRight) this.directionQueue.push({dx: -this.grid, dy: 0});
+        if (action === 'right' && !goingLeft) this.directionQueue.push({dx: this.grid, dy: 0});
+    }
+
+    loop(timestamp) {
+        if (!this.running) return;
+        requestAnimationFrame(this.loop.bind(this));
+
+        if (timestamp - this.lastTime < this.speed) return;
+        this.lastTime = timestamp;
+
+        // Aplikuj kolejke kierunków (zapobiega samobójstwu przy szybkim wciśnięciu)
+        if (this.directionQueue.length > 0) {
+            const nextDir = this.directionQueue.shift();
+            this.dx = nextDir.dx;
+            this.dy = nextDir.dy;
+        }
+
+        // Ruch
+        const head = {x: this.snake[0].x + this.dx, y: this.snake[0].y + this.dy};
+
+        // Kolizja ze ścianą
+        if (head.x < 0 || head.x >= this.canvas.width || head.y < 0 || head.y >= this.canvas.height) {
+            return this.gameOver();
+        }
+
+        // Kolizja z ogonem
+        for (let i = 0; i < this.snake.length; i++) {
+            if (head.x === this.snake[i].x && head.y === this.snake[i].y) {
+                return this.gameOver();
+            }
+        }
+
+        this.snake.unshift(head);
+
+        // Jedzenie
+        if (head.x === this.food.x && head.y === this.food.y) {
+            this.score += 10;
+            this.updateScore(this.score);
+            audio.playSfx('point');
+            this.placeFood();
+            // Szybiej co 50 punktów
+            if (this.score % 50 === 0 && this.speed > 50) this.speed -= 5;
+        } else {
+            this.snake.pop();
+        }
+
+        this.draw();
+    }
+
+    draw() {
+        this.ctx.fillStyle = '#000';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.ctx.fillStyle = '#00e676';
+        this.snake.forEach(part => {
+            this.ctx.fillRect(part.x, part.y, this.grid-1, this.grid-1);
+        });
+
+        this.ctx.fillStyle = '#ff1744';
+        this.ctx.fillRect(this.food.x, this.food.y, this.grid-1, this.grid-1);
+    }
+
+    gameOver() {
+        this.running = false;
+        audio.playSfx('crash');
+        this.onGameOver(this.score);
+    }
+}
+
+/**
+ * Logika Gry - Breakout
+ */
+class BreakoutGame {
+    constructor(canvas, onGameOver, updateScore) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.onGameOver = onGameOver;
+        this.updateScore = updateScore;
+        this.ballRadius = 6;
+        this.x = canvas.width / 2;
+        this.y = canvas.height - 30;
+        this.dx = 2;
+        this.dy = -2;
+        this.paddleHeight = 10;
+        this.paddleWidth = 75;
+        this.paddleX = (canvas.width - this.paddleWidth) / 2;
+        this.rightPressed = false;
+        this.leftPressed = false;
+        this.bricks = [];
+        this.brickRowCount = 3;
+        this.brickColumnCount = 5;
+        this.brickWidth = 75;
+        this.brickHeight = 20;
+        this.brickPadding = 10;
+        this.brickOffsetTop = 30;
+        this.brickOffsetLeft = 22.5; // (400 - (5*75 + 4*10)) / 2
+        this.score = 0;
+        this.running = false;
+    }
+
+    initBricks() {
+        this.bricks = [];
+        for(let c=0; c<this.brickColumnCount; c++) {
+            this.bricks[c] = [];
+            for(let r=0; r<this.brickRowCount; r++) {
+                this.bricks[c][r] = { x: 0, y: 0, status: 1 };
+            }
+        }
+    }
+
+    start() {
+        this.x = this.canvas.width / 2;
+        this.y = this.canvas.height - 30;
+        this.dx = 2 * (Math.random() > 0.5 ? 1 : -1);
+        this.dy = -2;
+        this.score = 0;
+        this.updateScore(0);
+        this.initBricks();
+        this.running = true;
+        this.draw();
+        requestAnimationFrame(this.loop.bind(this));
+    }
+
+    handleInput(action) {
+        if (action === 'left') this.leftPressed = true;
+        if (action === 'right') this.rightPressed = true;
+    }
+    
+    stopInput(action) {
+        if (action === 'left') this.leftPressed = false;
+        if (action === 'right') this.rightPressed = false;
+    }
+
+    collisionDetection() {
+        for(let c=0; c<this.brickColumnCount; c++) {
+            for(let r=0; r<this.brickRowCount; r++) {
+                let b = this.bricks[c][r];
+                if(b.status == 1) {
+                    if(this.x > b.x && this.x < b.x+this.brickWidth && this.y > b.y && this.y < b.y+this.brickHeight) {
+                        this.dy = -this.dy;
+                        b.status = 0;
+                        this.score++;
+                        this.updateScore(this.score);
+                        audio.playSfx('point');
+                        if(this.score == this.brickRowCount*this.brickColumnCount) {
+                            this.running = false;
+                            audio.playSfx('win');
+                            this.onGameOver(this.score, true);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    loop() {
+        if (!this.running) return;
+        requestAnimationFrame(this.loop.bind(this));
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.drawBricks();
+        this.drawBall();
+        this.drawPaddle();
+        this.collisionDetection();
+
+        if(this.x + this.dx > this.canvas.width-this.ballRadius || this.x + this.dx < this.ballRadius) {
+            this.dx = -this.dx;
+        }
+        if(this.y + this.dy < this.ballRadius) {
+            this.dy = -this.dy;
+        } else if(this.y + this.dy > this.canvas.height-this.ballRadius) {
+            if(this.x > this.paddleX && this.x < this.paddleX + this.paddleWidth) {
+                this.dy = -this.dy;
+                // Trochę przyspiesz po odbiciu
+                this.dx = this.dx * 1.05;
+                this.dy = this.dy * 1.05;
+            }
+            else {
+                this.running = false;
+                audio.playSfx('crash');
+                this.onGameOver(this.score);
+                return;
+            }
+        }
+
+        if(this.rightPressed && this.paddleX < this.canvas.width-this.paddleWidth) {
+            this.paddleX += 5;
+        }
+        else if(this.leftPressed && this.paddleX > 0) {
+            this.paddleX -= 5;
+        }
+
+        this.x += this.dx;
+        this.y += this.dy;
+    }
+
+    drawBall() {
+        this.ctx.beginPath();
+        this.ctx.arc(this.x, this.y, this.ballRadius, 0, Math.PI*2);
+        this.ctx.fillStyle = "#ff1744";
+        this.ctx.fill();
+        this.ctx.closePath();
+    }
+    drawPaddle() {
+        this.ctx.beginPath();
+        this.ctx.rect(this.paddleX, this.canvas.height-this.paddleHeight, this.paddleWidth, this.paddleHeight);
+        this.ctx.fillStyle = "#00e676";
+        this.ctx.fill();
+        this.ctx.closePath();
+    }
+    drawBricks() {
+        for(let c=0; c<this.brickColumnCount; c++) {
+            for(let r=0; r<this.brickRowCount; r++) {
+                if(this.bricks[c][r].status == 1) {
+                    let brickX = (c*(this.brickWidth+this.brickPadding))+this.brickOffsetLeft;
+                    let brickY = (r*(this.brickHeight+this.brickPadding))+this.brickOffsetTop;
+                    this.bricks[c][r].x = brickX;
+                    this.bricks[c][r].y = brickY;
+                    this.ctx.beginPath();
+                    this.ctx.rect(brickX, brickY, this.brickWidth, this.brickHeight);
+                    this.ctx.fillStyle = "#00e676";
+                    this.ctx.fill();
+                    this.ctx.closePath();
+                }
+            }
+        }
+    }
+    
+    draw() {
+        // Initial draw
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.drawBricks();
+        this.drawBall();
+        this.drawPaddle();
+    }
+}
+
+/**
+ * Logika Gry - Pamięć (Memory)
+ */
+class MemoryGame {
+    constructor(container, onGameOver, updateScore) {
+        this.container = container;
+        this.onGameOver = onGameOver;
+        this.updateScore = updateScore;
+        this.cards = [];
+        this.hasFlippedCard = false;
+        this.lockBoard = false;
+        this.firstCard = null;
+        this.secondCard = null;
+        this.matchesFound = 0;
+        this.moves = 0;
+        this.totalPairs = 8;
+    }
+
+    start() {
+        this.container.innerHTML = '';
+        this.cards = [];
+        this.matchesFound = 0;
+        this.moves = 0;
+        this.hasFlippedCard = false;
+        this.lockBoard = false;
+        this.firstCard = null;
+        this.secondCard = null;
+        this.updateScore(0);
+        
+        const emojis = ['🚀', '🪐', '👽', '☄️', '🛰️', '👨‍🚀', '🌑', '⭐'];
+        const gameCards = [...emojis, ...emojis];
+        
+        // Shuffle
+        gameCards.sort(() => 0.5 - Math.random());
+
+        gameCards.forEach(emoji => {
+            const card = document.createElement('div');
+            card.classList.add('memory-card');
+            card.dataset.emoji = emoji;
+            card.innerText = emoji;
+            card.addEventListener('click', this.flipCard.bind(this));
+            this.container.appendChild(card);
+        });
+    }
+
+    flipCard(e) {
+        if (this.lockBoard) return;
+        if (e.target === this.firstCard) return;
+
+        e.target.classList.add('flipped');
+        audio.playSfx('click');
+
+        if (!this.hasFlippedCard) {
+            this.hasFlippedCard = true;
+            this.firstCard = e.target;
+            return;
+        }
+
+        this.secondCard = e.target;
+        this.checkForMatch();
+    }
+
+    checkForMatch() {
+        let isMatch = this.firstCard.dataset.emoji === this.secondCard.dataset.emoji;
+        isMatch ? this.disableCards() : this.unflipCards();
+        this.moves++;
+        this.updateScore(this.moves);
+    }
+
+    disableCards() {
+        this.firstCard.classList.add('matched');
+        this.secondCard.classList.add('matched');
+        audio.playSfx('win');
+        
+        this.matchesFound++;
+        this.resetBoard();
+
+        if (this.matchesFound === this.totalPairs) {
+            setTimeout(() => this.onGameOver(this.moves), 500);
+        }
+    }
+
+    unflipCards() {
+        this.lockBoard = true;
+        setTimeout(() => {
+            this.firstCard.classList.remove('flipped');
+            this.secondCard.classList.remove('flipped');
+            this.resetBoard();
+        }, 1000);
+    }
+
+    resetBoard() {
+        [this.hasFlippedCard, this.lockBoard] = [false, false];
+        [this.firstCard, this.secondCard] = [null, null];
+    }
+}
+
+/**
+ * Główny Zarządca
+ */
+const gameManager = {
+    activeGame: null,
+    activeGameInstance: null,
+
+    loadGame: function(gameType) {
+        audio.playSfx('click');
+        document.getElementById('game-menu').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('score-display').innerText = '0';
+
+        const canvas = document.getElementById('gameCanvas');
+        const memoryGrid = document.getElementById('memory-grid');
+        const actionBtn = document.getElementById('btn-action');
+
+        canvas.style.display = 'none';
+        memoryGrid.style.display = 'none';
+        actionBtn.style.display = 'none';
+
+        if (gameType === 'snake') {
+            canvas.style.display = 'block';
+            this.activeGameInstance = new SnakeGame(canvas, this.showGameOver.bind(this), (s) => document.getElementById('score-display').innerText = s);
+        } else if (gameType === 'breakout') {
+            canvas.style.display = 'block';
+            this.activeGameInstance = new BreakoutGame(canvas, this.showGameOver.bind(this), (s) => document.getElementById('score-display').innerText = s);
+        } else if (gameType === 'memory') {
+            memoryGrid.style.display = 'grid';
+            this.activeGameInstance = new MemoryGame(memoryGrid, this.showGameOver.bind(this), (s) => document.getElementById('score-display').innerText = s);
+        }
+
+        this.activeGame = gameType;
+        this.activeGameInstance.start();
+    },
+
+    restartGame: function() {
+        document.getElementById('overlay').style.display = 'none';
+        this.activeGameInstance.start();
+    },
+
+    backToMenu: function() {
+        audio.playSfx('click');
+        if (this.activeGameInstance && this.activeGameInstance.running) {
+             this.activeGameInstance.running = false; // Stop game loop
+        }
+        document.getElementById('game-container').style.display = 'none';
+        document.getElementById('game-menu').style.display = 'grid';
+        document.getElementById('overlay').style.display = 'none';
+    },
+
+    handleInput: function(action) {
+        if (this.activeGameInstance && this.activeGameInstance.handleInput) {
+            this.activeGameInstance.handleInput(action);
+        }
+    },
+
+    showGameOver: function(score, win = false) {
+        const overlay = document.getElementById('overlay');
+        const title = document.getElementById('overlay-title');
+        const msg = document.getElementById('overlay-msg');
+        
+        title.innerText = win ? "Zwycięstwo!" : "Koniec Gry";
+        title.style.color = win ? "var(--primary-color)" : "var(--accent-color)";
+        msg.innerText = `Twój wynik: ${score}`;
+        
+        overlay.style.display = 'flex';
+    }
+};
+
+// Inicjalizacja Audio
+const audio = new AudioController();
+const audioBtn = document.getElementById('audio-toggle');
+
+audioBtn.addEventListener('click', () => {
+    const isActive = audio.toggle();
+    audioBtn.innerText = isActive ? "🔊 Dźwięk: ON" : "🔇 Dźwięk: OFF";
+    audioBtn.classList.toggle('active', isActive);
+});
+
+// Obsługa klawiatury
+document.addEventListener('keydown', (e) => {
+    if (!gameManager.activeGameInstance) return;
+    
+    // Obsługa dla Memory (nie wymaga klawiszy, ale restart to Enter)
+    if (gameManager.activeGame === 'memory') return;
+
+    switch(e.key) {
+        case 'ArrowUp': gameManager.handleInput('up'); break;
+        case 'ArrowDown': gameManager.handleInput('down'); break;
+        case 'ArrowLeft': gameManager.handleInput('left'); break;
+        case 'ArrowRight': gameManager.handleInput('right'); break;
+        case ' ': gameManager.handleInput('action'); break;
+    }
+    
+    // Zatrzymanie continuous movement dla Breakout przy puszczeniu (opcjonalne, tu uproszczone)
+    if (gameManager.activeGame === 'breakout' && e.key === 'ArrowRight') gameManager.activeGameInstance.stopInput('right');
+    if (gameManager.activeGame === 'breakout' && e.key === 'ArrowLeft') gameManager.activeGameInstance.stopInput('left');
+});
+
+document.addEventListener('keyup', (e) => {
+    if (gameManager.activeGame === 'breakout' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+        gameManager.activeGameInstance.stopInput(e.key.replace('Arrow', '').toLowerCase());
+    }
+});
+
+</script>
+</body>
+</html>
